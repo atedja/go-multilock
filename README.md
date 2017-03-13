@@ -76,7 +76,7 @@ then attempts to lock the same keys again.
 
     lock := multilock.Lock("somekey")
     for resource["somekey"] == nil {
-      Yield(lock)
+      lock.Yield()
     }
     // process resource["somekey"]
     Unlock(lock)
