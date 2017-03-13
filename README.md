@@ -6,9 +6,10 @@ Multilock allows you to obtain multiple locks without deadlock. It also uses
 strings as locks, which allows multiple goroutines to synchronize independently
 without having to share common mutex objects.
 
-One common application is to use an external id (e.g. resource IDs)
+One common application is to use multiple external ids (e.g. resource IDs)
 as the lock, and thereby preventing multiple goroutines from potentially
-reading/writing to the same resource.
+reading/writing to the same resources, creating some form of transactional
+locking.
 
 ### Installation
 
@@ -62,9 +63,16 @@ func main() {
     lock := multilock.Lock("somekey")
     defer multilock.Unlock(lock)
 
+Or, alternatively
+
+    lock := multilock.New("somekey")
+    lock.Lock()
+    defer lock.Unlock()
+
 #### Yield
 
-Temporarily unlocks the acquired lock, yields cpu time to other goroutines, then attempts to lock the same keys again.
+Temporarily unlocks the acquired lock, yields cpu time to other goroutines,
+then attempts to lock the same keys again.
 
     lock := multilock.Lock("somekey")
     for resource["somekey"] == nil {
@@ -75,18 +83,27 @@ Temporarily unlocks the acquired lock, yields cpu time to other goroutines, then
 
 #### Clean your unused locks
 
-If you use undetermined number of keys, e.g. timestamp, then overtime the number of locks will grow creating a
-memory "leak". `Clean()` will remove unused locks. This method is threadsafe. If some keys are to be used again,
-the system will automatically create new locks for those keys and everybody is happy again.
+If you use nondeterministic number of keys, e.g. timestamp, then overtime the
+number of locks will grow creating a memory "leak". `Clean()` will remove
+unused locks. This method is threadsafe, and can be executed even while other
+goroutines furiously attempt to acquire other keys. If some keys are to be used
+again (as soon as immediately), Multilock will automatically create new locks
+for those keys and everybody is happy again.
 
     multilock.Clean()
+
+#### Compatibility with `sync.Locker` interface
+
+For compatibilty's sake, `multilock.Multilock` struct implements `sync.Locker`
+interface, and can be used by other locking mechanism, e.g. `sync.Cond`.
 
 ### Best Practices
 
 #### Specify all your locks at once
 
-Specify all the locks you need at once. DO NOT create nested `multilock.Lock()`
-statements.  It beats the purpose of having this library in the first place.
+Specify all the locks you need for your transaction at once. DO NOT create
+nested `multilock.Lock()` statements.  It beats the purpose of having this
+library in the first place.
 
 #### Always `Unlock` your locks
 
