@@ -29,50 +29,82 @@ var locks = struct {
 	list: make(map[string]chan byte),
 }
 
-type AcquiredLock struct {
+type MultiLock struct {
 	keys  []string
 	chans []chan byte
+	m     *sync.Mutex
 }
 
-// Attempts to lock multiple keys. Keys must be unique.
-// Return an object that must be passed back to Unlock().
-func Lock(locks ...string) *AcquiredLock {
-	locks = unique(locks)
-	sort.Strings(locks)
-	acqChans := make([]chan byte, 0, len(locks))
+func (self *MultiLock) Lock() {
+	self.m.Lock()
+	if self.chans != nil {
+		panic("Cannot lock twice!")
+	}
 
 	// get the channels and attempt to acquire them
-	for i := 0; i < len(locks); {
-		ch := getChan(locks[i])
+	self.chans = make([]chan byte, 0, len(self.keys))
+	for i := 0; i < len(self.keys); {
+		ch := getChan(self.keys[i])
 		_, ok := <-ch
 		if ok {
-			acqChans = append(acqChans, ch)
+			self.chans = append(self.chans, ch)
 			i++
 		}
 	}
+	self.m.Unlock()
+}
 
-	return &AcquiredLock{
-		keys:  locks,
-		chans: acqChans,
+// Unlocks this lock. Must be called after Lock.
+func (self *MultiLock) Unlock() {
+	self.m.Lock()
+	if self.chans != nil {
+		for _, ch := range self.chans {
+			ch <- 1
+		}
+		self.chans = nil
 	}
+	self.m.Unlock()
+}
+
+// Temporarily unlocks, gives up the cpu time to other goroutine, and attempts to lock again.
+func (self *MultiLock) Yield() {
+	self.Unlock()
+	runtime.Gosched()
+	self.Lock()
+}
+
+// Creates a new multilock for the specified keys
+func New(locks ...string) *MultiLock {
+	if len(locks) == 0 {
+		return nil
+	}
+
+	locks = unique(locks)
+	sort.Strings(locks)
+	return &MultiLock{
+		keys: locks,
+		m:    &sync.Mutex{},
+	}
+}
+
+// Attempts to lock multiple keys. Keys must be unique.
+// Return an MultiLock instance that must be unlocked.
+func Lock(locks ...string) *MultiLock {
+	ml := New(locks...)
+	ml.Lock()
+	return ml
 }
 
 // Unlocks an acquired lock. Must be called after Lock.
-func Unlock(al *AcquiredLock) {
-	for _, ch := range al.chans {
-		ch <- 1
+func Unlock(ml *MultiLock) {
+	if ml == nil {
+		return
 	}
+
+	ml.Unlock()
 }
 
-// Temporarily releases the locks and attempts to acquire them again.
-func Yield(al *AcquiredLock) {
-	Unlock(al)
-	runtime.Gosched()
-	newLock := Lock(al.keys...)
-	al.chans = newLock.chans
-}
-
-// Cleans old unused locks. Returns removed locks.
+// Cleans old unused locks. Returns removed keys.
 func Clean() []string {
 	locks.Lock()
 	defer locks.Unlock()

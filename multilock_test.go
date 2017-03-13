@@ -118,7 +118,7 @@ func TestYield(t *testing.T) {
 		defer Unlock(lock)
 
 		for resources["ac"] == 0 {
-			Yield(lock)
+			lock.Yield()
 		}
 		resources["dc"] = 10
 
@@ -131,7 +131,7 @@ func TestYield(t *testing.T) {
 
 		resources["ac"] = 5
 		for resources["dc"] == 0 {
-			Yield(lock)
+			lock.Yield()
 		}
 
 		wg.Done()
@@ -205,4 +205,37 @@ func TestClean(t *testing.T) {
 	done <- true
 	wg.Wait()
 	assert.Equal(t, []string{}, Clean())
+}
+
+func TestSyncCondCompatibility(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	cond := sync.NewCond(New("A", "C"))
+
+	sharedRsc := "foo"
+
+	go func() {
+		cond.L.Lock()
+		for sharedRsc == "foo" {
+			cond.Wait()
+		}
+		sharedRsc = "fizz!"
+		cond.Broadcast()
+		cond.L.Unlock()
+		wg.Done()
+	}()
+
+	go func() {
+		cond.L.Lock()
+		sharedRsc = "bar"
+		cond.Broadcast()
+		for sharedRsc == "bar" {
+			cond.Wait()
+		}
+		cond.L.Unlock()
+		wg.Done()
+	}()
+
+	wg.Wait()
+	assert.Equal(t, "fizz!", sharedRsc)
 }
