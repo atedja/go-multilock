@@ -72,8 +72,8 @@ func Yield(al *AcquiredLock) {
 	al.chans = newLock.chans
 }
 
-// Cleans old unused locks
-func Clean() {
+// Cleans old unused locks. Returns removed locks.
+func Clean() []string {
 	locks.Lock()
 	defer locks.Unlock()
 
@@ -90,6 +90,7 @@ func Clean() {
 	for _, del := range toDelete {
 		delete(locks.list, del)
 	}
+	return toDelete
 }
 
 // Create and get the channel for the specified key.

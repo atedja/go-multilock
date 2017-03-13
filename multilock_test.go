@@ -68,7 +68,7 @@ func TestLockUnlock(t *testing.T) {
 		lock := Lock("dog", "cat", "owl")
 		defer Unlock(lock)
 
-		<-time.After(1 * time.Second)
+		<-time.After(100 * time.Millisecond)
 		wg.Done()
 	}()
 
@@ -76,7 +76,7 @@ func TestLockUnlock(t *testing.T) {
 		lock := Lock("cat", "dog", "bird")
 		defer Unlock(lock)
 
-		<-time.After(1 * time.Second)
+		<-time.After(100 * time.Millisecond)
 		wg.Done()
 	}()
 
@@ -84,7 +84,7 @@ func TestLockUnlock(t *testing.T) {
 		lock := Lock("cat", "bird", "owl")
 		defer Unlock(lock)
 
-		<-time.After(1 * time.Second)
+		<-time.After(100 * time.Millisecond)
 		wg.Done()
 	}()
 
@@ -92,7 +92,7 @@ func TestLockUnlock(t *testing.T) {
 		lock := Lock("bird", "owl", "snake")
 		defer Unlock(lock)
 
-		<-time.After(1 * time.Second)
+		<-time.After(100 * time.Millisecond)
 		wg.Done()
 	}()
 
@@ -105,4 +105,110 @@ func TestLockUnlock(t *testing.T) {
 	}()
 
 	wg.Wait()
+}
+
+func TestYield(t *testing.T) {
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+	var value = make([]string, 0, 4)
+
+	go func() {
+		lock := Lock("A", "C")
+		defer Unlock(lock)
+
+		oldchans := lock.chans
+
+		<-time.After(100 * time.Millisecond)
+		value = append(value, "ac1")
+		Yield(lock)
+		value = append(value, "ac2")
+
+		assert.Equal(t, oldchans, lock.chans)
+
+		wg.Done()
+	}()
+
+	go func() {
+		lock := Lock("D", "C")
+		defer Unlock(lock)
+
+		oldchans := lock.chans
+
+		<-time.After(100 * time.Millisecond)
+		value = append(value, "dc1")
+		Yield(lock)
+		value = append(value, "dc2")
+
+		assert.Equal(t, oldchans, lock.chans)
+
+		wg.Done()
+	}()
+
+	wg.Wait()
+	assert.Equal(t, 4, len(value))
+}
+
+func TestClean(t *testing.T) {
+	var wg sync.WaitGroup
+
+	wg.Add(3)
+
+	// some goroutine that holds multiple locks
+	go1done := make(chan bool, 1)
+	go func() {
+	Loop:
+		for {
+			select {
+			case <-go1done:
+				break Loop
+			default:
+				lock := Lock("A", "B", "C", "E", "Z")
+				<-time.After(30 * time.Millisecond)
+				Unlock(lock)
+			}
+		}
+		wg.Done()
+	}()
+
+	// another goroutine
+	go2done := make(chan bool, 1)
+	go func() {
+	Loop:
+		for {
+			select {
+			case <-go2done:
+				break Loop
+			default:
+				lock := Lock("B", "C", "K", "L", "Z")
+				<-time.After(200 * time.Millisecond)
+				Unlock(lock)
+			}
+		}
+		wg.Done()
+	}()
+
+	// this one cleans up the locks every 100 ms
+	done := make(chan bool, 1)
+	go func() {
+		c := time.Tick(100 * time.Millisecond)
+	Loop:
+		for {
+			select {
+			case <-done:
+				break Loop
+			case <-c:
+				Clean()
+			}
+		}
+		wg.Done()
+	}()
+
+	<-time.After(2 * time.Second)
+	go1done <- true
+	go2done <- true
+	<-time.After(1 * time.Second)
+	done <- true
+	wg.Wait()
+	assert.Equal(t, []string{}, Clean())
 }
