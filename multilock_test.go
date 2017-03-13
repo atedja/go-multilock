@@ -146,7 +146,14 @@ func TestYield(t *testing.T) {
 	}()
 
 	wg.Wait()
+
+	// should be alternating
 	assert.Equal(t, 4, len(value))
+	prev := ""
+	for _, v := range value {
+		assert.NotEqual(t, prev, v)
+		prev = v
+	}
 }
 
 func TestClean(t *testing.T) {
