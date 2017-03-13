@@ -207,6 +207,56 @@ func TestClean(t *testing.T) {
 	assert.Equal(t, []string{}, Clean())
 }
 
+func TestBankAccountProblem(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	joe := 50.0
+	susan := 100.0
+
+	// withdraw $80 from joe, only if balance is sufficient
+	go func() {
+		lock := Lock("joe")
+		defer Unlock(lock)
+
+		for joe < 80.0 {
+			lock.Yield()
+		}
+		joe -= 80.0
+
+		wg.Done()
+	}()
+
+	// transfer $200 from susan to joe, only if balance is sufficient
+	go func() {
+		lock := Lock("joe", "susan")
+		defer Unlock(lock)
+
+		for susan < 200.0 {
+			lock.Yield()
+		}
+
+		susan -= 200.0
+		joe += 200.0
+
+		wg.Done()
+	}()
+
+	// susan deposit $300 to cover balance
+	go func() {
+		lock := Lock("susan")
+		defer Unlock(lock)
+
+		susan += 300.0
+
+		wg.Done()
+	}()
+
+	wg.Wait()
+	assert.Equal(t, 170.0, joe)
+	assert.Equal(t, 200.0, susan)
+}
+
 func TestSyncCondCompatibility(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
