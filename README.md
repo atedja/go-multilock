@@ -53,6 +53,34 @@ func main() {
 }
 ```
 
+#### [Full API Documentation](https://godoc.org/github.com/atedja/go-multilock)
+
+### Basic Usage
+
+#### Lock and Unlock
+
+    lock := multilock.Lock("somekey")
+    defer multilock.Unlock(lock)
+
+#### Yield
+
+Temporarily unlocks the acquired lock, yields cpu time to other goroutines, then attempts to lock the same keys again.
+
+    lock := multilock.Lock("somekey")
+    for resource["somekey"] == nil {
+      Yield(lock)
+    }
+    // process resource["somekey"]
+    Unlock(lock)
+
+#### Clean your unused locks
+
+If you use undetermined number of keys, e.g. timestamp, then overtime the number of locks will grow creating a
+memory "leak". `Clean()` will remove unused locks. This method is threadsafe. If some keys are to be used again,
+the system will automatically create new locks for those keys and everybody is happy again.
+
+    multilock.Clean()
+
 ### Best Practices
 
 #### Specify all your locks at once

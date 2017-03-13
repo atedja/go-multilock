@@ -111,20 +111,16 @@ func TestYield(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(2)
-	var value = make([]string, 0, 4)
+	var resources = map[string]int{}
 
 	go func() {
 		lock := Lock("A", "C")
 		defer Unlock(lock)
 
-		oldchans := lock.chans
-
-		<-time.After(100 * time.Millisecond)
-		value = append(value, "ac1")
-		Yield(lock)
-		value = append(value, "ac2")
-
-		assert.Equal(t, oldchans, lock.chans)
+		for resources["ac"] == 0 {
+			Yield(lock)
+		}
+		resources["dc"] = 10
 
 		wg.Done()
 	}()
@@ -133,27 +129,18 @@ func TestYield(t *testing.T) {
 		lock := Lock("D", "C")
 		defer Unlock(lock)
 
-		oldchans := lock.chans
-
-		<-time.After(100 * time.Millisecond)
-		value = append(value, "dc1")
-		Yield(lock)
-		value = append(value, "dc2")
-
-		assert.Equal(t, oldchans, lock.chans)
+		resources["ac"] = 5
+		for resources["dc"] == 0 {
+			Yield(lock)
+		}
 
 		wg.Done()
 	}()
 
 	wg.Wait()
 
-	// should be alternating
-	assert.Equal(t, 4, len(value))
-	prev := ""
-	for _, v := range value {
-		assert.NotEqual(t, prev, v)
-		prev = v
-	}
+	assert.Equal(t, 5, resources["ac"])
+	assert.Equal(t, 10, resources["dc"])
 }
 
 func TestClean(t *testing.T) {
