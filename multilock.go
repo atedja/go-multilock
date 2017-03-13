@@ -17,6 +17,7 @@ limitations under the License.
 package multilock
 
 import (
+	"runtime"
 	"sort"
 	"sync"
 )
@@ -29,33 +30,65 @@ var locks = struct {
 }
 
 type AcquiredLock struct {
+	keys  []string
 	chans []chan byte
 }
 
 // Attempts to lock multiple keys. Keys must be unique.
 // Return an object that must be passed back to Unlock().
-func Lock(locks ...string) AcquiredLock {
+func Lock(locks ...string) *AcquiredLock {
 	locks = unique(locks)
 	sort.Strings(locks)
 	acqChans := make([]chan byte, 0, len(locks))
 
 	// get the channels and attempt to acquire them
-	for _, l := range locks {
-		acqChans = append(acqChans, getChan(l))
-	}
-	for _, ch := range acqChans {
-		<-ch
+	for i := 0; i < len(locks); {
+		ch := getChan(locks[i])
+		_, ok := <-ch
+		if ok {
+			acqChans = append(acqChans, ch)
+			i++
+		}
 	}
 
-	return AcquiredLock{
+	return &AcquiredLock{
+		keys:  locks,
 		chans: acqChans,
 	}
 }
 
 // Unlocks an acquired lock. Must be called after Lock.
-func Unlock(al AcquiredLock) {
+func Unlock(al *AcquiredLock) {
 	for _, ch := range al.chans {
 		ch <- 1
+	}
+}
+
+// Temporarily releases the locks and attempts to acquire them again.
+func Yield(al *AcquiredLock) {
+	Unlock(al)
+	runtime.Gosched()
+	newLock := Lock(al.keys...)
+	al.chans = newLock.chans
+}
+
+// Cleans old unused locks
+func Clean() {
+	locks.Lock()
+	defer locks.Unlock()
+
+	toDelete := make([]string, 0, len(locks.list))
+	for key, ch := range locks.list {
+		select {
+		case <-ch:
+			close(ch)
+			toDelete = append(toDelete, key)
+		default:
+		}
+	}
+
+	for _, del := range toDelete {
+		delete(locks.list, del)
 	}
 }
 
