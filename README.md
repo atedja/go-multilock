@@ -33,9 +33,9 @@ func main() {
     lock := multilock.Lock("bird", "dog", "cat")
     defer multilock.Unlock(lock)
 
-    fmt.Println("Doing something with bird, dog, and cat...")
+    fmt.Println("Taking photos of bird, dog, and cat...")
     <-time.After(1 * time.Second)
-    fmt.Println("bird, dog, and cat processed!")
+    fmt.Println("bird, dog, and cat photos taken!")
     wg.Done()
   }()
 
@@ -43,9 +43,9 @@ func main() {
     lock := multilock.Lock("whale", "cat")
     defer multilock.Unlock(lock)
 
-    fmt.Println("Doing something with whale and cat...")
+    fmt.Println("Taking photos of whale and cat...")
     <-time.After(1 * time.Second)
-    fmt.Println("whale and cat processed!")
+    fmt.Println("whale and cat photos taken!")
     wg.Done()
   }()
 
