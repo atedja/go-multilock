@@ -49,22 +49,23 @@ func (self *MultiLock) Lock() {
 			i++
 		}
 	}
+
+	self.unlock <- 1
 }
 
 // Unlocks this lock. Must be called after Lock.
+// Can only be invoked if there is a previous call to Lock.
 func (self *MultiLock) Unlock() {
-	self.unlock <- 1
-	defer func() { <-self.unlock }()
+	<-self.unlock
 
-	if len(self.lock) > 0 {
-		if self.chans != nil {
-			for _, ch := range self.chans {
-				ch <- 1
-			}
-			self.chans = nil
+	if self.chans != nil {
+		for _, ch := range self.chans {
+			ch <- 1
 		}
-		<-self.lock
+		self.chans = nil
 	}
+
+	<-self.lock
 }
 
 // Temporarily unlocks, gives up the cpu time to other goroutine, and attempts to lock again.
