@@ -19,13 +19,13 @@ package multilock
 import (
 	"runtime"
 	"sort"
-	"sync"
 )
 
 var locks = struct {
-	sync.Mutex
+	lock chan byte
 	list map[string]chan byte
 }{
+	lock: make(chan byte, 1),
 	list: make(map[string]chan byte),
 }
 
@@ -54,6 +54,8 @@ func (self *MultiLock) Lock() {
 // Unlocks this lock. Must be called after Lock.
 func (self *MultiLock) Unlock() {
 	self.unlock <- 1
+	defer func() { <-self.unlock }()
+
 	if len(self.lock) > 0 {
 		if self.chans != nil {
 			for _, ch := range self.chans {
@@ -63,7 +65,6 @@ func (self *MultiLock) Unlock() {
 		}
 		<-self.lock
 	}
-	<-self.unlock
 }
 
 // Temporarily unlocks, gives up the cpu time to other goroutine, and attempts to lock again.
@@ -107,8 +108,8 @@ func Unlock(ml *MultiLock) {
 
 // Cleans old unused locks. Returns removed keys.
 func Clean() []string {
-	locks.Lock()
-	defer locks.Unlock()
+	locks.lock <- 1
+	defer func() { <-locks.lock }()
 
 	toDelete := make([]string, 0, len(locks.list))
 	for key, ch := range locks.list {
@@ -123,13 +124,15 @@ func Clean() []string {
 	for _, del := range toDelete {
 		delete(locks.list, del)
 	}
+
 	return toDelete
 }
 
 // Create and get the channel for the specified key.
 func getChan(key string) chan byte {
-	locks.Lock()
-	defer locks.Unlock()
+	locks.lock <- 1
+	defer func() { <-locks.lock }()
+
 	if locks.list[key] == nil {
 		locks.list[key] = make(chan byte, 1)
 		locks.list[key] <- 1
