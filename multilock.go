@@ -29,14 +29,14 @@ var locks = struct {
 	list: make(map[string]chan byte),
 }
 
-type MultiLock struct {
+type Lock struct {
 	keys   []string
 	chans  []chan byte
 	lock   chan byte
 	unlock chan byte
 }
 
-func (self *MultiLock) Lock() {
+func (self *Lock) Lock() {
 	self.lock <- 1
 
 	// get the channels and attempt to acquire them
@@ -55,7 +55,7 @@ func (self *MultiLock) Lock() {
 
 // Unlocks this lock. Must be called after Lock.
 // Can only be invoked if there is a previous call to Lock.
-func (self *MultiLock) Unlock() {
+func (self *Lock) Unlock() {
 	<-self.unlock
 
 	if self.chans != nil {
@@ -69,42 +69,25 @@ func (self *MultiLock) Unlock() {
 }
 
 // Temporarily unlocks, gives up the cpu time to other goroutine, and attempts to lock again.
-func (self *MultiLock) Yield() {
+func (self *Lock) Yield() {
 	self.Unlock()
 	runtime.Gosched()
 	self.Lock()
 }
 
 // Creates a new multilock for the specified keys
-func New(locks ...string) *MultiLock {
+func New(locks ...string) *Lock {
 	if len(locks) == 0 {
 		return nil
 	}
 
 	locks = unique(locks)
 	sort.Strings(locks)
-	return &MultiLock{
+	return &Lock{
 		keys:   locks,
 		lock:   make(chan byte, 1),
 		unlock: make(chan byte, 1),
 	}
-}
-
-// Attempts to lock multiple keys. Keys must be unique.
-// Return an MultiLock instance that must be unlocked.
-func Lock(locks ...string) *MultiLock {
-	ml := New(locks...)
-	ml.Lock()
-	return ml
-}
-
-// Unlocks an acquired lock. Must be called after Lock.
-func Unlock(ml *MultiLock) {
-	if ml == nil {
-		return
-	}
-
-	ml.Unlock()
 }
 
 // Cleans old unused locks. Returns removed keys.

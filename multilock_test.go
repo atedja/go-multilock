@@ -65,40 +65,45 @@ func TestLockUnlock(t *testing.T) {
 	wg.Add(5)
 
 	go func() {
-		lock := Lock("dog", "cat", "owl")
-		defer Unlock(lock)
+		lock := New("dog", "cat", "owl")
+		lock.Lock()
+		defer lock.Unlock()
 
 		<-time.After(100 * time.Millisecond)
 		wg.Done()
 	}()
 
 	go func() {
-		lock := Lock("cat", "dog", "bird")
-		defer Unlock(lock)
+		lock := New("cat", "dog", "bird")
+		lock.Lock()
+		defer lock.Unlock()
 
 		<-time.After(100 * time.Millisecond)
 		wg.Done()
 	}()
 
 	go func() {
-		lock := Lock("cat", "bird", "owl")
-		defer Unlock(lock)
+		lock := New("cat", "bird", "owl")
+		lock.Lock()
+		defer lock.Unlock()
 
 		<-time.After(100 * time.Millisecond)
 		wg.Done()
 	}()
 
 	go func() {
-		lock := Lock("bird", "owl", "snake")
-		defer Unlock(lock)
+		lock := New("bird", "owl", "snake")
+		lock.Lock()
+		defer lock.Unlock()
 
 		<-time.After(100 * time.Millisecond)
 		wg.Done()
 	}()
 
 	go func() {
-		lock := Lock("owl", "snake")
-		defer Unlock(lock)
+		lock := New("owl", "snake")
+		lock.Lock()
+		defer lock.Unlock()
 
 		<-time.After(1 * time.Second)
 		wg.Done()
@@ -114,8 +119,9 @@ func TestYield(t *testing.T) {
 	var resources = map[string]int{}
 
 	go func() {
-		lock := Lock("A", "C")
-		defer Unlock(lock)
+		lock := New("A", "C")
+		lock.Lock()
+		defer lock.Unlock()
 
 		for resources["ac"] == 0 {
 			lock.Yield()
@@ -126,8 +132,9 @@ func TestYield(t *testing.T) {
 	}()
 
 	go func() {
-		lock := Lock("D", "C")
-		defer Unlock(lock)
+		lock := New("D", "C")
+		lock.Lock()
+		defer lock.Unlock()
 
 		resources["ac"] = 5
 		for resources["dc"] == 0 {
@@ -157,9 +164,10 @@ func TestClean(t *testing.T) {
 			case <-go1done:
 				break Loop
 			default:
-				lock := Lock("A", "B", "C", "E", "Z")
+				lock := New("A", "B", "C", "E", "Z")
+				lock.Lock()
 				<-time.After(30 * time.Millisecond)
-				Unlock(lock)
+				lock.Unlock()
 			}
 		}
 		wg.Done()
@@ -174,9 +182,10 @@ func TestClean(t *testing.T) {
 			case <-go2done:
 				break Loop
 			default:
-				lock := Lock("B", "C", "K", "L", "Z")
+				lock := New("B", "C", "K", "L", "Z")
+				lock.Lock()
 				<-time.After(200 * time.Millisecond)
-				Unlock(lock)
+				lock.Unlock()
 			}
 		}
 		wg.Done()
@@ -216,8 +225,9 @@ func TestBankAccountProblem(t *testing.T) {
 
 	// withdraw $80 from joe, only if balance is sufficient
 	go func() {
-		lock := Lock("joe")
-		defer Unlock(lock)
+		lock := New("joe")
+		lock.Lock()
+		defer lock.Unlock()
 
 		for joe < 80.0 {
 			lock.Yield()
@@ -229,8 +239,9 @@ func TestBankAccountProblem(t *testing.T) {
 
 	// transfer $200 from susan to joe, only if balance is sufficient
 	go func() {
-		lock := Lock("joe", "susan")
-		defer Unlock(lock)
+		lock := New("joe", "susan")
+		lock.Lock()
+		defer lock.Unlock()
 
 		for susan < 200.0 {
 			lock.Yield()
@@ -244,8 +255,9 @@ func TestBankAccountProblem(t *testing.T) {
 
 	// susan deposit $300 to cover balance
 	go func() {
-		lock := Lock("susan")
-		defer Unlock(lock)
+		lock := New("susan")
+		lock.Lock()
+		defer lock.Unlock()
 
 		susan += 300.0
 

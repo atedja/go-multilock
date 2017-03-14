@@ -31,8 +31,9 @@ func main() {
   wg.Add(2)
 
   go func() {
-    lock := multilock.Lock("bird", "dog", "cat")
-    defer multilock.Unlock(lock)
+    lock := multilock.New("bird", "dog", "cat")
+    lock.Lock()
+    defer lock.Unlock()
 
     fmt.Println("Taking photos of bird, dog, and cat...")
     <-time.After(1 * time.Second)
@@ -41,8 +42,9 @@ func main() {
   }()
 
   go func() {
-    lock := multilock.Lock("whale", "cat")
-    defer multilock.Unlock(lock)
+    lock := multilock.New("whale", "cat")
+    lock.Lock()
+    defer lock.Unlock()
 
     fmt.Println("Taking photos of whale and cat...")
     <-time.After(1 * time.Second)
@@ -60,11 +62,6 @@ func main() {
 
 #### Lock and Unlock
 
-    lock := multilock.Lock("somekey")
-    defer multilock.Unlock(lock)
-
-Or, alternatively
-
     lock := multilock.New("somekey")
     lock.Lock()
     defer lock.Unlock()
@@ -74,7 +71,8 @@ Or, alternatively
 Temporarily unlocks the acquired lock, yields cpu time to other goroutines,
 then attempts to lock the same keys again.
 
-    lock := multilock.Lock("somekey")
+    lock := multilock.New("somekey")
+    lock.Lock()
     for resource["somekey"] == nil {
       lock.Yield()
     }
@@ -94,16 +92,16 @@ for those keys and everybody is happy again.
 
 #### Compatibility with `sync.Locker` interface
 
-For compatibilty's sake, `multilock.Multilock` struct implements `sync.Locker`
-interface, and can be used by other locking mechanism, e.g. `sync.Cond`.
+For compatibilty's sake, `multilock.Lock` implements `sync.Locker` interface,
+and can be used by other locking mechanism, e.g. `sync.Cond`.
 
 ### Best Practices
 
 #### Specify all your locks at once
 
 Specify all the locks you need for your transaction at once. DO NOT create
-nested `multilock.Lock()` statements.  It beats the purpose of having this
-library in the first place.
+nested `Lock()` statements.  The lock is NOT reentrant. Likewise, DO NOT
+call `Unlock()` without a matching `Lock()`. They both are blocking.
 
 #### Always `Unlock` your locks
 
