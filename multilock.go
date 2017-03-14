@@ -30,16 +30,14 @@ var locks = struct {
 }
 
 type MultiLock struct {
-	keys  []string
-	chans []chan byte
-	m     *sync.Mutex
+	keys   []string
+	chans  []chan byte
+	lock   chan byte
+	unlock chan byte
 }
 
 func (self *MultiLock) Lock() {
-	self.m.Lock()
-	if self.chans != nil {
-		panic("Cannot lock twice!")
-	}
+	self.lock <- 1
 
 	// get the channels and attempt to acquire them
 	self.chans = make([]chan byte, 0, len(self.keys))
@@ -51,19 +49,21 @@ func (self *MultiLock) Lock() {
 			i++
 		}
 	}
-	self.m.Unlock()
 }
 
 // Unlocks this lock. Must be called after Lock.
 func (self *MultiLock) Unlock() {
-	self.m.Lock()
-	if self.chans != nil {
-		for _, ch := range self.chans {
-			ch <- 1
+	self.unlock <- 1
+	if len(self.lock) > 0 {
+		if self.chans != nil {
+			for _, ch := range self.chans {
+				ch <- 1
+			}
+			self.chans = nil
 		}
-		self.chans = nil
+		<-self.lock
 	}
-	self.m.Unlock()
+	<-self.unlock
 }
 
 // Temporarily unlocks, gives up the cpu time to other goroutine, and attempts to lock again.
@@ -82,8 +82,9 @@ func New(locks ...string) *MultiLock {
 	locks = unique(locks)
 	sort.Strings(locks)
 	return &MultiLock{
-		keys: locks,
-		m:    &sync.Mutex{},
+		keys:   locks,
+		lock:   make(chan byte, 1),
+		unlock: make(chan byte, 1),
 	}
 }
 
